@@ -14,7 +14,7 @@ export async function downloadAndUnzip(vscodeExecutablePath: string, downloadPla
     throw Error('Failed to download latest release from update server');
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<boolean>((resolve, reject) => {
     if (res.data.responseUrl.endsWith('.zip')) {
       res.data
         .pipe(unzipper.Extract({ path: vscodeExecutablePath }))
