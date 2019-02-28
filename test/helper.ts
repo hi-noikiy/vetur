@@ -1,47 +1,56 @@
-import * as vscode from 'vscode';
-import * as fs from 'fs';
+import axios from 'axios';
+import * as unzipper from 'unzipper';
+import * as tar from 'tar';
 
-export const EXT_IDENTIFIER = 'octref.vetur';
-export const FILE_LOAD_SLEEP_TIME = 1500;
+export async function downloadAndUnzip(vscodeExecutablePath: string, downloadPlatform: string): Promise<boolean> {
+  const downloadUrl = await getDownloadUrl(downloadPlatform);
+  console.log('Downloading VS Code into "' + vscodeExecutablePath + '" from: ' + downloadUrl);
 
-export const ext = vscode.extensions.getExtension(EXT_IDENTIFIER);
-
-/**
- * Activate Extension and open a Vue file to make sure LS is running
- */
-export async function activateLS() {
-  try {
-    await ext!.activate();
-  } catch (err) {
-    console.error(err);
-    console.log(`Failed to activate ${EXT_IDENTIFIER}`);
-    process.exit(1);
+  const res = await axios.get(downloadUrl, {
+    responseType: 'stream',
+    headers: { 'user-agent': 'nodejs' }
+  });
+  if (res.status !== 200 || !res.data) {
+    throw Error('Failed to download latest release from update server');
   }
-}
 
-export async function showFile(docUri: vscode.Uri) {
-  const doc = await vscode.workspace.openTextDocument(docUri);
-  return await vscode.window.showTextDocument(doc);
-}
-
-export async function setEditorContent(editor: vscode.TextEditor, content: string): Promise<boolean> {
-  const doc = editor.document;
-  const all = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-  return editor.edit(eb => eb.replace(all, content));
-}
-
-export function readFileAsync(path: string) {
   return new Promise((resolve, reject) => {
-    fs.readFile(path, 'utf-8', (err, data) => {
-      if (err) {
-        reject(err);
-      }
-
-      resolve(data);
-    });
+    if (res.data.responseUrl.endsWith('.zip')) {
+      res.data
+        .pipe(unzipper.Extract({ path: vscodeExecutablePath }))
+        .on('error', () => {
+          reject(false);
+        })
+        .on('close', () => {
+          resolve(true);
+        });
+    } else if (res.data.responseUrl.endsWith('.tar.gz')) {
+      res.data
+        .pipe(tar.extract({ cwd: vscodeExecutablePath }))
+        .on('error', () => {
+          reject(false);
+        })
+        .on('close', () => {
+          resolve(true);
+        });
+    } else {
+      reject(false);
+    }
   });
 }
 
-export function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+async function getDownloadUrl(downloadPlatform: string) {
+  const url = `https://update.code.visualstudio.com/api/releases/stable/${downloadPlatform}`;
+
+  try {
+    const res = await axios.get(url);
+    if (res.status !== 200 || !res.data) {
+      throw Error('Failed to get latest release version from update server');
+    }
+    const versions = res.data;
+
+    return `https://update.code.visualstudio.com/${versions[0]}/${downloadPlatform}/stable`;
+  } catch (err) {
+    throw Error('Failed to get latest release version from update server');
+  }
 }

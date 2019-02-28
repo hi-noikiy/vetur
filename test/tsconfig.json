@@ -6,6 +6,7 @@
     "outDir": "../dist",
 
     "noImplicitAny": false,
+    "noEmitOnError": false,
     "lib": ["es2015"]
   },
   "include": [
