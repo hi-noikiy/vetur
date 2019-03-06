@@ -20,16 +20,16 @@ export interface LanguageRange extends Range {
 
 export interface VueDocumentRegions {
   getSingleLanguageDocument(languageId: LanguageId): TextDocument;
+  getSingleTypeDocument(type: RegionType): TextDocument;
 
-  getEmbeddedDocumentByType(type: EmbeddedType): TextDocument;
-  getLanguageRangeByType(type: EmbeddedType): LanguageRange | undefined;
+  getLanguageRangeByType(type: RegionType): LanguageRange | undefined;
   getLanguageRanges(range: Range): LanguageRange[];
   getLanguageAtPosition(position: Position): string;
   getLanguagesInDocument(): string[];
   getImportedScripts(): string[];
 }
 
-type EmbeddedType = 'template' | 'script' | 'style' | 'custom';
+type RegionType = 'template' | 'script' | 'style' | 'custom';
 
 const defaultType: { [type: string]: string } = {
   template: 'vue-html',
@@ -42,10 +42,10 @@ export function getVueDocumentRegions(document: TextDocument): VueDocumentRegion
 
   return {
     getSingleLanguageDocument: (languageId: LanguageId) => getSingleLanguageDocument(document, regions, languageId),
+    getSingleTypeDocument: (type: RegionType) => getSingleTypeDocument(document, regions, type),
 
     getLanguageRanges: (range: Range) => getLanguageRanges(document, regions, range),
-    getLanguageRangeByType: (type: EmbeddedType) => getLanguageRangeByType(document, regions, type),
-    getEmbeddedDocumentByType: (type: EmbeddedType) => getEmbeddedDocumentByType(document, regions, type),
+    getLanguageRangeByType: (type: RegionType) => getLanguageRangeByType(document, regions, type),
     getLanguageAtPosition: (position: Position) => getLanguageAtPosition(document, regions, position),
     getLanguagesInDocument: () => getLanguagesInDocument(document, regions),
     getImportedScripts: () => importedScripts
@@ -137,27 +137,31 @@ export function getSingleLanguageDocument(
   return TextDocument.create(document.uri, languageId, document.version, newContent);
 }
 
-function getEmbeddedDocumentByType(
+/**
+ * Get a document where all regions of `type` RegionType is preserved
+ * Whereas other regions are replaced with whitespaces
+ */
+export function getSingleTypeDocument(
   document: TextDocument,
-  contents: EmbeddedRegion[],
-  type: EmbeddedType
+  regions: EmbeddedRegion[],
+  type: RegionType
 ): TextDocument {
   const oldContent = document.getText();
-  let result = '';
-  for (const c of contents) {
-    if (c.type === type) {
-      result = oldContent.substring(0, c.start).replace(/./g, ' ');
-      result += oldContent.substring(c.start, c.end);
-      return TextDocument.create(document.uri, c.languageId, document.version, result);
+  let newContent = oldContent.replace(/./g, ' ');
+
+  for (const r of regions) {
+    if (r.type === type) {
+      newContent = newContent.slice(0, r.start) + oldContent.slice(r.start, r.end) + newContent.slice(r.end);
     }
   }
-  return TextDocument.create(document.uri, defaultType[type], document.version, result);
+
+  return TextDocument.create(document.uri, defaultType[type], document.version, newContent);
 }
 
 function getLanguageRangeByType(
   document: TextDocument,
   contents: EmbeddedRegion[],
-  type: EmbeddedType
+  type: RegionType
 ): LanguageRange | undefined {
   for (const c of contents) {
     if (c.type === type) {

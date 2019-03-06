@@ -1,7 +1,7 @@
 import { TextDocument } from 'vscode-languageserver-types';
 import * as assert from 'assert';
 import { parseVueDocumentRegions } from '../vueDocumentRegionParser';
-import { getSingleLanguageDocument } from '../embeddedSupport';
+import { getSingleLanguageDocument, getSingleTypeDocument } from '../embeddedSupport';
 
 const src = `
 <template>
@@ -28,11 +28,23 @@ suite('New Embedded Support', () => {
     assert.equal(regions[2].languageId, 'css');
   });
 
-  test('Get Pure Language Document', () => {
+  test('Get Single Language Document', () => {
     const doc = TextDocument.create('test://test.vue', 'vue', 0, src);
     const { regions } = parseVueDocumentRegions(doc);
 
     const newDoc = getSingleLanguageDocument(doc, regions, 'javascript');
+    const jsSrc = `export default {
+
+}`;
+    assert.equal(doc.getText().length, newDoc.getText().length);
+    assert.equal(newDoc.getText().trim(), jsSrc);
+  });
+
+  test('Get Single RegionType Document', () => {
+    const doc = TextDocument.create('test://test.vue', 'vue', 0, src);
+    const { regions } = parseVueDocumentRegions(doc);
+
+    const newDoc = getSingleTypeDocument(doc, regions, 'script');
     const jsSrc = `export default {
 
 }`;

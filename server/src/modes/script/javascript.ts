@@ -52,7 +52,7 @@ export function getJavascriptMode(
   }
   const jsDocuments = getLanguageModelCache(10, 60, document => {
     const vueDocument = documentRegions.get(document);
-    return vueDocument.getEmbeddedDocumentByType('script');
+    return vueDocument.getSingleTypeDocument('script');
   });
 
   const regionStart = getLanguageModelCache(10, 60, document => {
