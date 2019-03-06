@@ -38,6 +38,17 @@
       ]
     },
     {
+      "type": "node",
+      "request": "launch",
+      "name": "Unit Test (LSP)",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "args": [
+        "${workspaceFolder}/server/test"
+      ],
+      "cwd": "${workspaceFolder}/server",
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
       "name": "E2E Test (LSP)",
       "type": "extensionHost",
       "request": "launch",

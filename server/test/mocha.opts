@@ -1,7 +1,8 @@
 --ui tdd
---useColors true
+--colors
 --require source-map-support/register
 --exit
+./dist/embeddedSupport/test
 ./dist/modes/template/test
 ./dist/modes/style/stylus/test
 ./dist/modes/test/
