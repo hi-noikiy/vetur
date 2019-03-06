@@ -22,7 +22,8 @@ export interface VueDocumentRegions {
   getSingleLanguageDocument(languageId: LanguageId): TextDocument;
   getSingleTypeDocument(type: RegionType): TextDocument;
 
-  getLanguageRangeByType(type: RegionType): LanguageRange | undefined;
+  getLanguageRangesOfType(type: RegionType): LanguageRange[];
+
   getLanguageRanges(range: Range): LanguageRange[];
   getLanguageAtPosition(position: Position): string;
   getLanguagesInDocument(): string[];
@@ -44,8 +45,9 @@ export function getVueDocumentRegions(document: TextDocument): VueDocumentRegion
     getSingleLanguageDocument: (languageId: LanguageId) => getSingleLanguageDocument(document, regions, languageId),
     getSingleTypeDocument: (type: RegionType) => getSingleTypeDocument(document, regions, type),
 
+    getLanguageRangesOfType: (type: RegionType) => getLanguageRangesOfType(document, regions, type),
+
     getLanguageRanges: (range: Range) => getLanguageRanges(document, regions, range),
-    getLanguageRangeByType: (type: RegionType) => getLanguageRangeByType(document, regions, type),
     getLanguageAtPosition: (position: Position) => getLanguageAtPosition(document, regions, position),
     getLanguagesInDocument: () => getLanguagesInDocument(document, regions),
     getImportedScripts: () => importedScripts
@@ -158,18 +160,22 @@ export function getSingleTypeDocument(
   return TextDocument.create(document.uri, defaultType[type], document.version, newContent);
 }
 
-function getLanguageRangeByType(
+export function getLanguageRangesOfType(
   document: TextDocument,
-  contents: EmbeddedRegion[],
+  regions: EmbeddedRegion[],
   type: RegionType
-): LanguageRange | undefined {
-  for (const c of contents) {
-    if (c.type === type) {
-      return {
-        start: document.positionAt(c.start),
-        end: document.positionAt(c.end),
-        languageId: c.languageId
-      };
+): LanguageRange[] {
+  const result = [];
+
+  for (const r of regions) {
+    if (r.type === type) {
+      result.push({
+        start: document.positionAt(r.start),
+        end: document.positionAt(r.end),
+        languageId: r.languageId
+      });
     }
   }
+
+  return result;
 }

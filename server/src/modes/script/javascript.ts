@@ -57,7 +57,7 @@ export function getJavascriptMode(
 
   const regionStart = getLanguageModelCache(10, 60, document => {
     const vueDocument = documentRegions.get(document);
-    return vueDocument.getLanguageRangeByType('script');
+    return vueDocument.getLanguageRangesOfType('script');
   });
 
   const serviceHost = getServiceHost(workspacePath, jsDocuments);
