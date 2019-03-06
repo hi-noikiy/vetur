@@ -1,13 +1,25 @@
 import { TextDocument, Position, Range } from 'vscode-languageserver-types';
-import { parseVueDocumentRegions } from './vueDocumentRegionParser';
+import { parseVueDocumentRegions, EmbeddedRegion } from './vueDocumentRegionParser';
+
+export type LanguageId =
+  | 'vue'
+  | 'vue-html'
+  | 'pug'
+  | 'css'
+  | 'postcss'
+  | 'scss'
+  | 'less'
+  | 'stylus'
+  | 'javascript'
+  | 'typescript';
 
 export interface LanguageRange extends Range {
-  languageId: string;
+  languageId: LanguageId;
   attributeValue?: boolean;
 }
 
 export interface VueDocumentRegions {
-  getSingleLanguageDocument(languageId: string): TextDocument;
+  getSingleLanguageDocument(languageId: LanguageId): TextDocument;
 
   getEmbeddedDocumentByType(type: EmbeddedType): TextDocument;
   getLanguageRangeByType(type: EmbeddedType): LanguageRange | undefined;
@@ -19,13 +31,6 @@ export interface VueDocumentRegions {
 
 type EmbeddedType = 'template' | 'script' | 'style' | 'custom';
 
-interface EmbeddedRegion {
-  languageId: string;
-  start: number;
-  end: number;
-  type: EmbeddedType;
-}
-
 const defaultType: { [type: string]: string } = {
   template: 'vue-html',
   script: 'javascript',
@@ -36,7 +41,7 @@ export function getVueDocumentRegions(document: TextDocument): VueDocumentRegion
   const { regions, importedScripts } = parseVueDocumentRegions(document);
 
   return {
-    getSingleLanguageDocument: (languageId: string) => getSingleLanguageDocument(document, regions, languageId),
+    getSingleLanguageDocument: (languageId: LanguageId) => getSingleLanguageDocument(document, regions, languageId),
 
     getLanguageRanges: (range: Range) => getLanguageRanges(document, regions, range),
     getLanguageRangeByType: (type: EmbeddedType) => getLanguageRangeByType(document, regions, type),
@@ -118,7 +123,7 @@ function getLanguageAtPosition(document: TextDocument, regions: EmbeddedRegion[]
 export function getSingleLanguageDocument(
   document: TextDocument,
   regions: EmbeddedRegion[],
-  languageId: string
+  languageId: LanguageId
 ): TextDocument {
   const oldContent = document.getText();
   let newContent = oldContent.replace(/./g, ' ');
