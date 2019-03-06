@@ -20,7 +20,7 @@ import {
 } from 'vscode-languageserver-types';
 
 import { getLanguageModelCache, LanguageModelCache } from './languageModelCache';
-import { getDocumentRegions, VueDocumentRegions } from './embeddedSupport';
+import { getVueDocumentRegions, VueDocumentRegions } from './embeddedSupport';
 import { getVueMode } from '../modes/vue';
 import { getCSSMode, getSCSSMode, getLESSMode, getPostCSSMode } from '../modes/style';
 import { getJavascriptMode } from '../modes/script/javascript';
@@ -70,7 +70,9 @@ export interface LanguageModeRange extends Range {
 }
 
 export function getLanguageModes(workspacePath: string | null | undefined): LanguageModes {
-  const documentRegions = getLanguageModelCache<VueDocumentRegions>(10, 60, document => getDocumentRegions(document));
+  const documentRegions = getLanguageModelCache<VueDocumentRegions>(10, 60, document =>
+    getVueDocumentRegions(document)
+  );
 
   let modelCaches: LanguageModelCache<any>[] = [];
   modelCaches.push(documentRegions);
