@@ -1,4 +1,4 @@
-import { LanguageModes } from '../modes/languageModes';
+import { LanguageModes } from '../embeddedSupport/languageModes';
 import { TextDocument } from 'vscode-languageserver';
 import { getFileFsPath } from '../utils/paths';
 import { Definition } from 'vscode-languageserver-types';
@@ -38,7 +38,7 @@ export interface ChildComponent {
   definition?: {
     path: string;
     start: number;
-    end: number
+    end: number;
   };
   info?: VueFileInfo;
 }

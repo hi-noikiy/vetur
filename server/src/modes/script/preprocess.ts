@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import * as path from 'path';
 
-import { getDocumentRegions } from '../embeddedSupport';
+import { getDocumentRegions } from '../../embeddedSupport/embeddedSupport';
 import { TextDocument } from 'vscode-languageserver-types';
 
 export function isVue(filename: string): boolean {
@@ -22,7 +22,7 @@ function isTSLike(scriptKind: ts.ScriptKind | undefined) {
 export function createUpdater() {
   const clssf = ts.createLanguageServiceSourceFile;
   const ulssf = ts.updateLanguageServiceSourceFile;
-  const scriptKindTracker = new WeakMap<ts.SourceFile, ts.ScriptKind|undefined>();
+  const scriptKindTracker = new WeakMap<ts.SourceFile, ts.ScriptKind | undefined>();
 
   return {
     createLanguageServiceSourceFile(
