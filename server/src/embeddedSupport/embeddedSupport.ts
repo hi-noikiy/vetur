@@ -7,7 +7,8 @@ export interface LanguageRange extends Range {
 }
 
 export interface VueDocumentRegions {
-  getEmbeddedDocument(languageId: string): TextDocument;
+  getSingleLanguageDocument(languageId: string): TextDocument;
+
   getEmbeddedDocumentByType(type: EmbeddedType): TextDocument;
   getLanguageRangeByType(type: EmbeddedType): LanguageRange | undefined;
   getLanguageRanges(range: Range): LanguageRange[];
@@ -35,9 +36,10 @@ export function getVueDocumentRegions(document: TextDocument): VueDocumentRegion
   const { regions, importedScripts } = parseVueDocumentRegions(document);
 
   return {
+    getSingleLanguageDocument: (languageId: string) => getSingleLanguageDocument(document, regions, languageId),
+
     getLanguageRanges: (range: Range) => getLanguageRanges(document, regions, range),
     getLanguageRangeByType: (type: EmbeddedType) => getLanguageRangeByType(document, regions, type),
-    getEmbeddedDocument: (languageId: string) => getEmbeddedDocument(document, regions, languageId),
     getEmbeddedDocumentByType: (type: EmbeddedType) => getEmbeddedDocumentByType(document, regions, type),
     getLanguageAtPosition: (position: Position) => getLanguageAtPosition(document, regions, position),
     getLanguagesInDocument: () => getLanguagesInDocument(document, regions),
@@ -113,7 +115,7 @@ function getLanguageAtPosition(document: TextDocument, regions: EmbeddedRegion[]
  * Get a document where all regions of `languageId` is preserved
  * Whereas other regions are replaced with whitespaces
  */
-export function getEmbeddedDocument(
+export function getSingleLanguageDocument(
   document: TextDocument,
   regions: EmbeddedRegion[],
   languageId: string

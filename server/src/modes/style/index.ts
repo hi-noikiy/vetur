@@ -43,7 +43,7 @@ function getStyleMode(
   documentRegions: LanguageModelCache<VueDocumentRegions>
 ): LanguageMode {
   const embeddedDocuments = getLanguageModelCache(10, 60, document =>
-    documentRegions.get(document).getEmbeddedDocument(languageId)
+    documentRegions.get(document).getSingleLanguageDocument(languageId)
   );
   const stylesheets = getLanguageModelCache(10, 60, document => languageService.parseStylesheet(document));
   let config: any = {};
