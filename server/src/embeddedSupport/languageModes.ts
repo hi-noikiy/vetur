@@ -56,7 +56,6 @@ export interface LanguageMode {
 
 export interface LanguageModes {
   getModeAtPosition(document: TextDocument, position: Position): LanguageMode | null;
-  getModesInRange(document: TextDocument, range: Range): LanguageModeRange[];
   getAllModes(): LanguageMode[];
   getAllModesInDocument(document: TextDocument): LanguageMode[];
   getMode(languageId: string): LanguageMode;
@@ -99,20 +98,8 @@ export function getLanguageModes(workspacePath: string | null | undefined): Lang
       }
       return null;
     },
-    getModesInRange(document: TextDocument, range: Range): LanguageModeRange[] {
-      return documentRegions
-        .get(document)
-        .getLanguageRanges(range)
-        .map(r => {
-          return {
-            start: r.start,
-            end: r.end,
-            mode: modes[r.languageId],
-            attributeValue: r.attributeValue
-          };
-        });
-    },
-    getAllModesInDocument(document: TextDocument): LanguageMode[] {
+    getAllModesInDocument(document: TextDocument): LanguageModeRange[] {
+      documentRegions.get(document).getLanguagesInDocument()
       const result = [];
       for (const languageId of documentRegions.get(document).getLanguagesInDocument()) {
         const mode = modes[languageId];

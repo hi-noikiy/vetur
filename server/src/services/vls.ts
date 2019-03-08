@@ -159,9 +159,8 @@ export class VLS {
 
   onDocumentFormatting({ textDocument, options }: DocumentFormattingParams): TextEdit[] {
     const doc = this.documentService.getDocument(textDocument.uri)!;
-    const fullDocRange = Range.create(Position.create(0, 0), doc.positionAt(doc.getText().length));
 
-    const modeRanges = this.languageModes.getModesInRange(doc, fullDocRange);
+    const modeRanges = this.languageModes.getAllModesInDocument(doc);
     const allEdits: TextEdit[] = [];
 
     const errMessages: string[] = [];

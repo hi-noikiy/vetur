@@ -23,8 +23,8 @@ export interface VueDocumentRegions {
   getSingleTypeDocument(type: RegionType): TextDocument;
 
   getLanguageRangesOfType(type: RegionType): LanguageRange[];
+  getLanguageRanges(): LanguageRange[];
 
-  getLanguageRanges(range: Range): LanguageRange[];
   getLanguageAtPosition(position: Position): string;
   getLanguagesInDocument(): string[];
   getImportedScripts(): string[];
@@ -47,51 +47,21 @@ export function getVueDocumentRegions(document: TextDocument): VueDocumentRegion
 
     getLanguageRangesOfType: (type: RegionType) => getLanguageRangesOfType(document, regions, type),
 
-    getLanguageRanges: (range: Range) => getLanguageRanges(document, regions, range),
+    getLanguageRanges: () => getLanguageRanges(document, regions),
     getLanguageAtPosition: (position: Position) => getLanguageAtPosition(document, regions, position),
     getLanguagesInDocument: () => getLanguagesInDocument(document, regions),
     getImportedScripts: () => importedScripts
   };
 }
 
-function getLanguageRanges(document: TextDocument, regions: EmbeddedRegion[], range: Range): LanguageRange[] {
-  const result: LanguageRange[] = [];
-  let currentPos = range ? range.start : Position.create(0, 0);
-  let currentOffset = range ? document.offsetAt(range.start) : 0;
-  const endOffset = range ? document.offsetAt(range.end) : document.getText().length;
-  for (const region of regions) {
-    if (region.end > currentOffset && region.start < endOffset) {
-      const start = Math.max(region.start, currentOffset);
-      const startPos = document.positionAt(start);
-      if (currentOffset < region.start) {
-        result.push({
-          start: currentPos,
-          end: startPos,
-          languageId: 'vue'
-        });
-      }
-      const end = Math.min(region.end, endOffset);
-      const endPos = document.positionAt(end);
-      if (end > region.start) {
-        result.push({
-          start: startPos,
-          end: endPos,
-          languageId: region.languageId
-        });
-      }
-      currentOffset = end;
-      currentPos = endPos;
-    }
-  }
-  if (currentOffset < endOffset) {
-    const endPos = range ? range.end : document.positionAt(endOffset);
-    result.push({
-      start: currentPos,
-      end: endPos,
-      languageId: 'vue'
-    });
-  }
-  return result;
+function getLanguageRanges(document: TextDocument, regions: EmbeddedRegion[]): LanguageRange[] {
+  return regions.map(r => {
+    return {
+      languageId: r.languageId,
+      start: document.positionAt(r.start),
+      end: document.positionAt(r.end)
+    };
+  });
 }
 
 function getLanguagesInDocument(document: TextDocument, regions: EmbeddedRegion[]): string[] {
