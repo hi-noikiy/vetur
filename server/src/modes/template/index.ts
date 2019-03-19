@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 
 import { LanguageModelCache, getLanguageModelCache } from '../languageModelCache';
 import { TextDocument, Position, Range, FormattingOptions } from 'vscode-languageserver-types';
-import { ILanguageMode } from '../languageModes';
+import { ILanguageMode, VLSServices } from '../languageModes';
 import { VueDocumentRegions } from '../embeddedSupport';
 import { HTMLDocument } from './parser/htmlParser';
 import { doComplete } from './services/htmlCompletion';
@@ -39,13 +39,13 @@ export function getVueHTMLMode(documentRegions: DocumentRegionCache, workspacePa
     getId() {
       return 'vue-html';
     },
+    async init(workspacePath: string, services: VLSServices) {
+      vueInfoService = services.infoService;
+    },
     configure(c) {
       tagProviderSettings = _.assign(tagProviderSettings, c.html.suggest);
       enabledTagProviders = getEnabledTagProviders(tagProviderSettings);
       config = c;
-    },
-    configureService(services) {
-      vueInfoService = services.infoService;
     },
     doValidation(document) {
       const embedded = embeddedDocuments.get(document);

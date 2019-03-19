@@ -59,12 +59,13 @@ export class DependencyService {
   async init(workspacePath: string) {
     const workspaceTSPath = path.resolve(workspacePath, 'node_modules/typescript');
     const tsModule: T_TypeScript = await import(workspaceTSPath);
+    console.log(`Loading TypeScript ${tsModule.version}`);
 
     this.dependencies.typescript = {
       name: 'typecript',
       state: State.Loaded,
-      version: '1.0.0',
-      bundled: true,
+      version: tsModule.version,
+      bundled: false,
       module: tsModule
     };
   }

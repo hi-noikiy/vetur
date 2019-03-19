@@ -33,7 +33,7 @@ import {
   ColorPresentation
 } from 'vscode-languageserver-types';
 import Uri from 'vscode-uri';
-import { LanguageModes } from '../modes/languageModes';
+import { LanguageModes, VLSServices } from '../modes/languageModes';
 import { NULL_COMPLETION, NULL_HOVER, NULL_SIGNATURE } from '../modes/nullMode';
 import { DocumentContext } from '../types';
 import { DocumentService } from './documentService';
@@ -81,18 +81,21 @@ export class VLS {
 
     this.workspacePath = workspacePath;
 
-    this.languageModes.init(workspacePath);
-    this.vueInfoService.init(this.languageModes);
-    await this.dependencyService.init(workspacePath);
+    const vlsServices: VLSServices = {
+      infoService: this.vueInfoService,
+      dependencyService: this.dependencyService
+    };
 
-    this.languageModes.getAllModes().forEach(m => {
-      if (m.configureService) {
-        m.configureService({
-          infoService: this.vueInfoService,
-          dependencyService: this.dependencyService
-        });
+    await this.dependencyService.init(workspacePath);
+    await this.languageModes.init(workspacePath);
+    await this.vueInfoService.init(this.languageModes);
+
+    const modes = this.languageModes.getAllModes();
+    for (const m of modes) {
+      if (m.init) {
+        await m.init(workspacePath, vlsServices);
       }
-    });
+    }
 
     this.setupConfigListeners();
     this.setupLSPHandlers();

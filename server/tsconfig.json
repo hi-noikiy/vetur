@@ -6,6 +6,11 @@
     "rootDir": "src",
 
     "lib": ["es2015", "es2016.array.include"],
+
+    // Turn off this because most classes in server are asynchronously initialized.
+    // Since contructors can't be async, we have to delay initialization to 
+    // `async init()` but would like to avoid having to access each property with `!`
+    "strictPropertyInitialization": false
   },
   "include": [
     "src"

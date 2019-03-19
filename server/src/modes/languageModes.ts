@@ -23,7 +23,7 @@ import { getLanguageModelCache, LanguageModelCache } from './languageModelCache'
 import { getDocumentRegions, VueDocumentRegions } from './embeddedSupport';
 import { getVueMode } from './vue';
 import { getCSSMode, getSCSSMode, getLESSMode, getPostCSSMode } from './style';
-import { getJavascriptMode } from './script/javascript';
+import { JavaScriptMode } from './script/javascript';
 import { getVueHTMLMode } from './template';
 import { getStylusMode } from './style/stylus';
 import { DocumentContext } from '../types';
@@ -37,8 +37,8 @@ export interface VLSServices {
 
 export interface ILanguageMode {
   getId(): string;
+  init?(workspacePath: string, services: VLSServices): Promise<void>;
   configure?(options: any): void;
-  configureService?(services: VLSServices): void;
   updateFileInfo?(doc: TextDocument): void;
 
   doValidation?(document: TextDocument): Diagnostic[];
@@ -78,8 +78,7 @@ export class LanguageModes {
   }
 
   async init(workspacePath: string) {
-    const jsMode = getJavascriptMode(this.documentRegions, workspacePath);
-
+    const jsMode = new JavaScriptMode(this.documentRegions);
     this.modes['vue'] = getVueMode();
     this.modes['vue-html'] = getVueHTMLMode(this.documentRegions, workspacePath);
     this.modes['css'] = getCSSMode(this.documentRegions);
@@ -142,8 +141,11 @@ export class LanguageModes {
 
   onDocumentRemoved(document: TextDocument) {
     this.modelCaches.forEach(mc => mc.onDocumentRemoved(document));
-    for (const mode in this.modes) {
-      this.modes[mode].onDocumentRemoved(document);
+    for (const modeKey in this.modes) {
+      const mode = this.modes[modeKey];
+      if (mode && mode.onDocumentRemoved) {
+        mode.onDocumentRemoved(document);
+      }
     }
   }
 

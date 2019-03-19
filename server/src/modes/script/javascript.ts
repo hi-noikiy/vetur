@@ -24,7 +24,6 @@ import {
 } from 'vscode-languageserver-types';
 import { ILanguageMode, VLSServices } from '../languageModes';
 import { VueDocumentRegions, LanguageRange } from '../embeddedSupport';
-import { getServiceHost } from './serviceHost';
 import { prettierify, prettierEslintify } from '../../utils/prettier';
 import { getFileFsPath, getFilePath } from '../../utils/paths';
 
@@ -37,37 +36,49 @@ import {
   Program,
   LanguageService,
   ScriptElementKind,
-  CodeAction
+  CodeAction,
+  LanguageServiceHost
 } from 'typescript';
 import * as _ from 'lodash';
 
-import { nullMode, NULL_SIGNATURE } from '../nullMode';
+import { NULL_SIGNATURE } from '../nullMode';
 import { VLSFormatConfig } from '../../config';
 import { VueInfoService } from '../../services/vueInfoService';
 import { getComponentInfo } from './componentInfo';
-import { DependencyService, State, T_TypeScript } from '../../services/dependencyService';
+import { State, T_TypeScript } from '../../services/dependencyService';
+import { VueTSLanguageServiceHost } from './serviceHost2';
+import { getServiceHost } from './serviceHost';
 
 // Todo: After upgrading to LS server 4.0, use CompletionContext for filtering trigger chars
 // https://microsoft.github.io/language-server-protocol/specification#completion-request-leftwards_arrow_with_hook
 const NON_SCRIPT_TRIGGERS = ['<', '/', '*', ':'];
 
 export class JavaScriptMode implements ILanguageMode {
-  private vueInfoService: VueInfoService | undefined;
-  private dependencyService: DependencyService | undefined;
   private tsModule: T_TypeScript;
+  private tsLanguageServiceHost: VueTSLanguageServiceHost | LanguageServiceHost;
+  private tsLanguageService: LanguageService;
+  private vueInfoService: VueInfoService | undefined;
 
+  private jsDocuments: LanguageModelCache<TextDocument>;
   //@Todo: Remove this
   private regionStart: LanguageModelCache<LanguageRange | undefined>;
 
   private config: any = {};
 
+  //@Todo: Remove this
+  private updateCurrentTextDocument: any;
+  private updateExternalDocument: any;
+
   constructor(private documentRegions: LanguageModelCache<VueDocumentRegions>) {}
 
-  async init(workspacePath: string) {
+  async init(workspacePath: string, services: VLSServices) {
+    this.initServices(services);
+
     const jsDocuments = getLanguageModelCache(10, 60, document => {
       const vueDocument = this.documentRegions.get(document);
       return vueDocument.getEmbeddedDocumentByType('script');
     });
+    this.jsDocuments = jsDocuments;
 
     const regionStart = getLanguageModelCache(10, 60, document => {
       const vueDocument = this.documentRegions.get(document);
@@ -75,17 +86,19 @@ export class JavaScriptMode implements ILanguageMode {
     });
     this.regionStart = regionStart;
 
-    const serviceHost = getServiceHost(workspacePath, jsDocuments);
-    const { updateCurrentTextDocument } = serviceHost;
+    // this.tsLanguageServiceHost = new VueTSLanguageServiceHost(jsDocuments);
+    const { host, updateCurrentTextDocument, updateExternalDocument } = getServiceHost(workspacePath, jsDocuments);
+    this.tsLanguageServiceHost = host;
+    this.updateCurrentTextDocument = updateCurrentTextDocument;
+    this.updateExternalDocument = updateExternalDocument;
+    // await this.tsLanguageServiceHost.init(workspacePath, this.tsModule);
+    this.tsLanguageService = this.tsModule.createLanguageService(this.tsLanguageServiceHost);
   }
 
-  configure(c: any) {
-    this.config = c;
-  }
-
-  configureService(services: VLSServices) {
-    this.vueInfoService = services.infoService;
-
+  private initServices(services: VLSServices) {
+    if (services.infoService) {
+      this.vueInfoService = services.infoService;
+    }
     if (services.dependencyService) {
       const tsModule = services.dependencyService.getDependency('typescript');
       if (tsModule && tsModule.state === State.Loaded) {
@@ -94,15 +107,43 @@ export class JavaScriptMode implements ILanguageMode {
     }
   }
 
-  doValidation(doc: TextDocument): Diagnostic[] {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
+  getId() {
+    return 'javascript';
+  }
 
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+  configure(c: any) {
+    this.config = c;
+  }
+
+  updateFileInfo(doc: TextDocument): void {
+    if (!this.vueInfoService) {
+      return;
+    }
+
+    this.updateCurrentTextDocument(doc);
+    const fileFsPath = getFileFsPath(doc.uri);
+    const info = getComponentInfo(this.tsLanguageService, fileFsPath, this.config);
+    if (info) {
+      this.vueInfoService.updateInfo(doc, info);
+    }
+  }
+
+  /**
+   * LSP section begin
+   */
+
+  doValidation(doc: TextDocument): Diagnostic[] {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return [];
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const diagnostics = [...service.getSyntacticDiagnostics(fileFsPath), ...service.getSemanticDiagnostics(fileFsPath)];
+    const diagnostics = [
+      ...this.tsLanguageService.getSyntacticDiagnostics(fileFsPath),
+      ...this.tsLanguageService.getSemanticDiagnostics(fileFsPath)
+    ];
 
     return diagnostics.map(diag => {
       // syntactic/semantic diagnostic always has start and length
@@ -116,8 +157,9 @@ export class JavaScriptMode implements ILanguageMode {
   }
 
   doComplete(doc: TextDocument, position: Position): CompletionList {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return { isIncomplete: false, items: [] };
     }
 
@@ -127,7 +169,7 @@ export class JavaScriptMode implements ILanguageMode {
     if (NON_SCRIPT_TRIGGERS.includes(triggerChar)) {
       return { isIncomplete: false, items: [] };
     }
-    const completions = service.getCompletionsAtPosition(fileFsPath, offset, {
+    const completions = this.tsLanguageService.getCompletionsAtPosition(fileFsPath, offset, {
       includeExternalModuleExports: _.get(this.config, ['vetur', 'completion', 'autoImport']),
       includeInsertTextCompletions: false
     });
@@ -158,13 +200,12 @@ export class JavaScriptMode implements ILanguageMode {
     };
   }
   doResolve(doc: TextDocument, item: CompletionItem): CompletionItem {
-    const { service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return item;
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const details = service.getCompletionEntryDetails(
+    const details = this.tsLanguageService.getCompletionEntryDetails(
       fileFsPath,
       item.data.offset,
       item.label,
@@ -183,13 +224,13 @@ export class JavaScriptMode implements ILanguageMode {
     return item;
   }
   doHover(doc: TextDocument, position: Position): Hover {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return { contents: [] };
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const info = service.getQuickInfoAtPosition(fileFsPath, scriptDoc.offsetAt(position));
+    const info = this.tsLanguageService.getQuickInfoAtPosition(fileFsPath, scriptDoc.offsetAt(position));
     if (info) {
       const display = this.tsModule.displayPartsToString(info.displayParts);
       const doc = this.tsModule.displayPartsToString(info.documentation);
@@ -205,13 +246,13 @@ export class JavaScriptMode implements ILanguageMode {
     return { contents: [] };
   }
   doSignatureHelp(doc: TextDocument, position: Position): SignatureHelp | null {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return NULL_SIGNATURE;
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const signHelp = service.getSignatureHelpItems(fileFsPath, scriptDoc.offsetAt(position));
+    const signHelp = this.tsLanguageService.getSignatureHelpItems(fileFsPath, scriptDoc.offsetAt(position));
     if (!signHelp) {
       return NULL_SIGNATURE;
     }
@@ -246,13 +287,13 @@ export class JavaScriptMode implements ILanguageMode {
     return ret;
   }
   findDocumentHighlight(doc: TextDocument, position: Position): DocumentHighlight[] {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return [];
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const occurrences = service.getOccurrencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
+    const occurrences = this.tsLanguageService.getOccurrencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
     if (occurrences) {
       return occurrences.map(entry => {
         return {
@@ -264,13 +305,13 @@ export class JavaScriptMode implements ILanguageMode {
     return [];
   }
   findDocumentSymbols(doc: TextDocument): SymbolInformation[] {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return [];
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const items = service.getNavigationBarItems(fileFsPath);
+    const items = this.tsLanguageService.getNavigationBarItems(fileFsPath);
     if (!items) {
       return [];
     }
@@ -304,19 +345,19 @@ export class JavaScriptMode implements ILanguageMode {
     return result;
   }
   findDefinition(doc: TextDocument, position: Position): Definition {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return [];
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const definitions = service.getDefinitionAtPosition(fileFsPath, scriptDoc.offsetAt(position));
+    const definitions = this.tsLanguageService.getDefinitionAtPosition(fileFsPath, scriptDoc.offsetAt(position));
     if (!definitions) {
       return [];
     }
 
     const definitionResults: Definition = [];
-    const program = service.getProgram();
+    const program = this.tsLanguageService.getProgram();
     if (!program) {
       return [];
     }
@@ -330,19 +371,19 @@ export class JavaScriptMode implements ILanguageMode {
     return definitionResults;
   }
   findReferences(doc: TextDocument, position: Position): Location[] {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
-    if (!languageServiceIncludesFile(service, doc.uri)) {
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
+    if (!languageServiceIncludesFile(this.tsLanguageService, doc.uri)) {
       return [];
     }
 
     const fileFsPath = getFileFsPath(doc.uri);
-    const references = service.getReferencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
+    const references = this.tsLanguageService.getReferencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
     if (!references) {
       return [];
     }
 
     const referenceResults: Location[] = [];
-    const program = service.getProgram();
+    const program = this.tsLanguageService.getProgram();
     if (!program) {
       return [];
     }
@@ -358,7 +399,7 @@ export class JavaScriptMode implements ILanguageMode {
     return referenceResults;
   }
   format(doc: TextDocument, range: Range, formatParams: FormattingOptions): TextEdit[] {
-    const { scriptDoc, service } = updateCurrentTextDocument(doc);
+    const { scriptDoc } = this.updateCurrentTextDocument(doc);
 
     const defaultFormatter =
       scriptDoc.languageId === 'javascript'
@@ -396,7 +437,7 @@ export class JavaScriptMode implements ILanguageMode {
       const fileFsPath = getFileFsPath(doc.uri);
       const start = scriptDoc.offsetAt(range.start);
       const end = scriptDoc.offsetAt(range.end);
-      const edits = service.getFormattingEditsForRange(fileFsPath, start, end, convertedFormatSettings);
+      const edits = this.tsLanguageService.getFormattingEditsForRange(fileFsPath, start, end, convertedFormatSettings);
 
       if (!edits) {
         return [];
@@ -413,399 +454,21 @@ export class JavaScriptMode implements ILanguageMode {
       return result;
     }
   }
+
+  /**
+   * LSP section end
+   */
+
   onDocumentRemoved(document: TextDocument) {
-    jsDocuments.onDocumentRemoved(document);
+    this.jsDocuments.onDocumentRemoved(document);
   }
   onDocumentChanged(filePath: string) {
-    serviceHost.updateExternalDocument(filePath);
+    this.updateExternalDocument(filePath);
   }
   dispose() {
-    serviceHost.dispose();
-    jsDocuments.dispose();
+    this.tsLanguageService.dispose();
+    this.jsDocuments.dispose();
   }
-}
-
-export function getJavascriptMode(
-  documentRegions: LanguageModelCache<VueDocumentRegions>,
-  workspacePath: string | null | undefined
-): ILanguageMode {
-  if (!workspacePath) {
-    return {
-      ...nullMode
-    };
-  }
-  const jsDocuments = getLanguageModelCache(10, 60, document => {
-    const vueDocument = documentRegions.get(document);
-    return vueDocument.getEmbeddedDocumentByType('script');
-  });
-
-  const regionStart = getLanguageModelCache(10, 60, document => {
-    const vueDocument = documentRegions.get(document);
-    return vueDocument.getLanguageRangeByType('script');
-  });
-
-  const serviceHost = getServiceHost(workspacePath, jsDocuments);
-  const { updateCurrentTextDocument } = serviceHost;
-  let config: any = {};
-
-  let vueInfoService: VueInfoService | undefined;
-  let dependencyService: DependencyService | undefined;
-
-  return {
-    getId() {
-      return 'javascript';
-    },
-    configure(c) {
-      config = c;
-    },
-    configureService(services: VLSServices) {
-      vueInfoService = services.infoService;
-      dependencyService = services.dependencyService;
-    },
-    updateFileInfo(doc: TextDocument): void {
-      if (!vueInfoService) {
-        return;
-      }
-
-      const { service } = updateCurrentTextDocument(doc);
-      const fileFsPath = getFileFsPath(doc.uri);
-      const info = getComponentInfo(service, fileFsPath, config);
-      if (info) {
-        vueInfoService.updateInfo(doc, info);
-      }
-    },
-
-    doValidation(doc: TextDocument): Diagnostic[] {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return [];
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const diagnostics = [
-        ...service.getSyntacticDiagnostics(fileFsPath),
-        ...service.getSemanticDiagnostics(fileFsPath)
-      ];
-
-      return diagnostics.map(diag => {
-        // syntactic/semantic diagnostic always has start and length
-        // so we can safely cast diag to TextSpan
-        return {
-          range: convertRange(scriptDoc, diag as ts.TextSpan),
-          severity: DiagnosticSeverity.Error,
-          message: ts.flattenDiagnosticMessageText(diag.messageText, '\n')
-        };
-      });
-    },
-    doComplete(doc: TextDocument, position: Position): CompletionList {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return { isIncomplete: false, items: [] };
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const offset = scriptDoc.offsetAt(position);
-      const triggerChar = doc.getText()[offset - 1];
-      if (NON_SCRIPT_TRIGGERS.includes(triggerChar)) {
-        return { isIncomplete: false, items: [] };
-      }
-      const completions = service.getCompletionsAtPosition(fileFsPath, offset, {
-        includeExternalModuleExports: _.get(config, ['vetur', 'completion', 'autoImport']),
-        includeInsertTextCompletions: false
-      });
-      if (!completions) {
-        return { isIncomplete: false, items: [] };
-      }
-      const entries = completions.entries.filter(entry => entry.name !== '__vueEditorBridge');
-      return {
-        isIncomplete: false,
-        items: entries.map((entry, index) => {
-          const range = entry.replacementSpan && convertRange(scriptDoc, entry.replacementSpan);
-          return {
-            uri: doc.uri,
-            position,
-            label: entry.name,
-            sortText: entry.sortText + index,
-            kind: convertKind(entry.kind),
-            textEdit: range && TextEdit.replace(range, entry.name),
-            data: {
-              // data used for resolving item details (see 'doResolve')
-              languageId: scriptDoc.languageId,
-              uri: doc.uri,
-              offset,
-              source: entry.source
-            }
-          };
-        })
-      };
-    },
-    doResolve(doc: TextDocument, item: CompletionItem): CompletionItem {
-      const { service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return item;
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const details = service.getCompletionEntryDetails(
-        fileFsPath,
-        item.data.offset,
-        item.label,
-        /*formattingOption*/ {},
-        item.data.source
-      );
-      if (details) {
-        item.detail = ts.displayPartsToString(details.displayParts);
-        item.documentation = ts.displayPartsToString(details.documentation);
-        if (details.codeActions && config.vetur.completion.autoImport) {
-          const textEdits = convertCodeAction(doc, details.codeActions, regionStart);
-          item.additionalTextEdits = textEdits;
-        }
-        delete item.data;
-      }
-      return item;
-    },
-    doHover(doc: TextDocument, position: Position): Hover {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return { contents: [] };
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const info = service.getQuickInfoAtPosition(fileFsPath, scriptDoc.offsetAt(position));
-      if (info) {
-        const display = ts.displayPartsToString(info.displayParts);
-        const doc = ts.displayPartsToString(info.documentation);
-        const markedContents: MarkedString[] = [{ language: 'ts', value: display }];
-        if (doc) {
-          markedContents.unshift(doc, '\n');
-        }
-        return {
-          range: convertRange(scriptDoc, info.textSpan),
-          contents: markedContents
-        };
-      }
-      return { contents: [] };
-    },
-    doSignatureHelp(doc: TextDocument, position: Position): SignatureHelp | null {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return NULL_SIGNATURE;
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const signHelp = service.getSignatureHelpItems(fileFsPath, scriptDoc.offsetAt(position));
-      if (!signHelp) {
-        return NULL_SIGNATURE;
-      }
-      const ret: SignatureHelp = {
-        activeSignature: signHelp.selectedItemIndex,
-        activeParameter: signHelp.argumentIndex,
-        signatures: []
-      };
-      signHelp.items.forEach(item => {
-        const signature: SignatureInformation = {
-          label: '',
-          documentation: undefined,
-          parameters: []
-        };
-
-        signature.label += ts.displayPartsToString(item.prefixDisplayParts);
-        item.parameters.forEach((p, i, a) => {
-          const label = ts.displayPartsToString(p.displayParts);
-          const parameter: ParameterInformation = {
-            label,
-            documentation: ts.displayPartsToString(p.documentation)
-          };
-          signature.label += label;
-          signature.parameters!.push(parameter);
-          if (i < a.length - 1) {
-            signature.label += ts.displayPartsToString(item.separatorDisplayParts);
-          }
-        });
-        signature.label += ts.displayPartsToString(item.suffixDisplayParts);
-        ret.signatures.push(signature);
-      });
-      return ret;
-    },
-    findDocumentHighlight(doc: TextDocument, position: Position): DocumentHighlight[] {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return [];
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const occurrences = service.getOccurrencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
-      if (occurrences) {
-        return occurrences.map(entry => {
-          return {
-            range: convertRange(scriptDoc, entry.textSpan),
-            kind: entry.isWriteAccess ? DocumentHighlightKind.Write : DocumentHighlightKind.Text
-          };
-        });
-      }
-      return [];
-    },
-    findDocumentSymbols(doc: TextDocument): SymbolInformation[] {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return [];
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const items = service.getNavigationBarItems(fileFsPath);
-      if (!items) {
-        return [];
-      }
-      const result: SymbolInformation[] = [];
-      const existing: { [k: string]: boolean } = {};
-      const collectSymbols = (item: ts.NavigationBarItem, containerLabel?: string) => {
-        const sig = item.text + item.kind + item.spans[0].start;
-        if (item.kind !== 'script' && !existing[sig]) {
-          const symbol: SymbolInformation = {
-            name: item.text,
-            kind: convertSymbolKind(item.kind),
-            location: {
-              uri: doc.uri,
-              range: convertRange(scriptDoc, item.spans[0])
-            },
-            containerName: containerLabel
-          };
-          existing[sig] = true;
-          result.push(symbol);
-          containerLabel = item.text;
-        }
-
-        if (item.childItems && item.childItems.length > 0) {
-          for (const child of item.childItems) {
-            collectSymbols(child, containerLabel);
-          }
-        }
-      };
-
-      items.forEach(item => collectSymbols(item));
-      return result;
-    },
-    findDefinition(doc: TextDocument, position: Position): Definition {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return [];
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const definitions = service.getDefinitionAtPosition(fileFsPath, scriptDoc.offsetAt(position));
-      if (!definitions) {
-        return [];
-      }
-
-      const definitionResults: Definition = [];
-      const program = service.getProgram();
-      if (!program) {
-        return [];
-      }
-      definitions.forEach(d => {
-        const definitionTargetDoc = getSourceDoc(d.fileName, program);
-        definitionResults.push({
-          uri: Uri.file(d.fileName).toString(),
-          range: convertRange(definitionTargetDoc, d.textSpan)
-        });
-      });
-      return definitionResults;
-    },
-    findReferences(doc: TextDocument, position: Position): Location[] {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-      if (!languageServiceIncludesFile(service, doc.uri)) {
-        return [];
-      }
-
-      const fileFsPath = getFileFsPath(doc.uri);
-      const references = service.getReferencesAtPosition(fileFsPath, scriptDoc.offsetAt(position));
-      if (!references) {
-        return [];
-      }
-
-      const referenceResults: Location[] = [];
-      const program = service.getProgram();
-      if (!program) {
-        return [];
-      }
-      references.forEach(r => {
-        const referenceTargetDoc = getSourceDoc(r.fileName, program);
-        if (referenceTargetDoc) {
-          referenceResults.push({
-            uri: Uri.file(r.fileName).toString(),
-            range: convertRange(referenceTargetDoc, r.textSpan)
-          });
-        }
-      });
-      return referenceResults;
-    },
-    format(doc: TextDocument, range: Range, formatParams: FormattingOptions): TextEdit[] {
-      const { scriptDoc, service } = updateCurrentTextDocument(doc);
-
-      const defaultFormatter =
-        scriptDoc.languageId === 'javascript'
-          ? config.vetur.format.defaultFormatter.js
-          : config.vetur.format.defaultFormatter.ts;
-
-      if (defaultFormatter === 'none') {
-        return [];
-      }
-
-      const parser = scriptDoc.languageId === 'javascript' ? 'babylon' : 'typescript';
-      const needInitialIndent = config.vetur.format.scriptInitialIndent;
-      const vlsFormatConfig: VLSFormatConfig = config.vetur.format;
-
-      if (defaultFormatter === 'prettier' || defaultFormatter === 'prettier-eslint') {
-        const code = scriptDoc.getText();
-        const filePath = getFileFsPath(scriptDoc.uri);
-
-        return defaultFormatter === 'prettier'
-          ? prettierify(code, filePath, range, vlsFormatConfig, parser, needInitialIndent)
-          : prettierEslintify(code, filePath, range, vlsFormatConfig, parser, needInitialIndent);
-      } else {
-        const initialIndentLevel = needInitialIndent ? 1 : 0;
-        const formatSettings: ts.FormatCodeSettings =
-          scriptDoc.languageId === 'javascript' ? config.javascript.format : config.typescript.format;
-        const convertedFormatSettings = convertOptions(
-          formatSettings,
-          {
-            tabSize: vlsFormatConfig.options.tabSize,
-            insertSpaces: !vlsFormatConfig.options.useTabs
-          },
-          initialIndentLevel
-        );
-
-        const fileFsPath = getFileFsPath(doc.uri);
-        const start = scriptDoc.offsetAt(range.start);
-        const end = scriptDoc.offsetAt(range.end);
-        const edits = service.getFormattingEditsForRange(fileFsPath, start, end, convertedFormatSettings);
-
-        if (!edits) {
-          return [];
-        }
-        const result = [];
-        for (const edit of edits) {
-          if (edit.span.start >= start && edit.span.start + edit.span.length <= end) {
-            result.push({
-              range: convertRange(scriptDoc, edit.span),
-              newText: edit.newText
-            });
-          }
-        }
-        return result;
-      }
-    },
-    onDocumentRemoved(document: TextDocument) {
-      jsDocuments.onDocumentRemoved(document);
-    },
-    onDocumentChanged(filePath: string) {
-      serviceHost.updateExternalDocument(filePath);
-    },
-    dispose() {
-      serviceHost.dispose();
-      jsDocuments.dispose();
-    }
-  };
 }
 
 function getSourceDoc(fileName: string, program: Program): TextDocument {

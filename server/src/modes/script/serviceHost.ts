@@ -11,7 +11,7 @@ import * as bridge from './bridge';
 
 // Patch typescript functions to insert `import Vue from 'vue'` and `new Vue` around export default.
 // NOTE: this is a global hack that all ts instances after is changed
-const { createLanguageServiceSourceFile, updateLanguageServiceSourceFile } = createUpdater();
+const { createLanguageServiceSourceFile, updateLanguageServiceSourceFile } = createUpdater(ts);
 (ts as any).createLanguageServiceSourceFile = createLanguageServiceSourceFile;
 (ts as any).updateLanguageServiceSourceFile = updateLanguageServiceSourceFile;
 
@@ -168,7 +168,9 @@ export function getServiceHost(workspacePath: string, jsDocuments: LanguageModel
         const extension =
           doc.languageId === 'typescript'
             ? ts.Extension.Ts
-            : doc.languageId === 'tsx' ? ts.Extension.Tsx : ts.Extension.Js;
+            : doc.languageId === 'tsx'
+            ? ts.Extension.Tsx
+            : ts.Extension.Js;
         return { resolvedFileName, extension };
       });
     },
@@ -205,6 +207,7 @@ export function getServiceHost(workspacePath: string, jsDocuments: LanguageModel
     updateCurrentTextDocument,
     updateExternalDocument,
     getScriptDocByFsPath,
+    host,
     dispose: () => {
       jsLanguageService.dispose();
     }
