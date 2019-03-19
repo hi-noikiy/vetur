@@ -10,7 +10,7 @@ import * as emmet from 'vscode-emmet-helper';
 
 import { Priority } from './emmet';
 import { LanguageModelCache, getLanguageModelCache } from '../languageModelCache';
-import { LanguageMode } from '../languageModes';
+import { ILanguageMode } from '../languageModes';
 import { VueDocumentRegions } from '../embeddedSupport';
 import { getFileFsPath } from '../../utils/paths';
 import { prettierify } from '../../utils/prettier';
@@ -18,21 +18,21 @@ import { ParserOption } from '../../utils/prettier/prettier.d';
 import { NULL_HOVER } from '../nullMode';
 import { VLSFormatConfig } from '../../config';
 
-export function getCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): LanguageMode {
+export function getCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): ILanguageMode {
   const languageService = getCSSLanguageService();
   return getStyleMode('css', languageService, documentRegions);
 }
 
-export function getPostCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): LanguageMode {
+export function getPostCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): ILanguageMode {
   const languageService = getCSSLanguageService();
   return getStyleMode('postcss', languageService, documentRegions);
 }
 
-export function getSCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): LanguageMode {
+export function getSCSSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): ILanguageMode {
   const languageService = getSCSSLanguageService();
   return getStyleMode('scss', languageService, documentRegions);
 }
-export function getLESSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): LanguageMode {
+export function getLESSMode(documentRegions: LanguageModelCache<VueDocumentRegions>): ILanguageMode {
   const languageService = getLESSLanguageService();
   return getStyleMode('less', languageService, documentRegions);
 }
@@ -41,7 +41,7 @@ function getStyleMode(
   languageId: string,
   languageService: LanguageService,
   documentRegions: LanguageModelCache<VueDocumentRegions>
-): LanguageMode {
+): ILanguageMode {
   const embeddedDocuments = getLanguageModelCache(10, 60, document =>
     documentRegions.get(document).getEmbeddedDocument(languageId)
   );

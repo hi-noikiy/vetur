@@ -5,7 +5,7 @@ import { IStylusSupremacy } from './stylus-supremacy';
 
 import { Priority } from '../emmet';
 import { LanguageModelCache, getLanguageModelCache } from '../../languageModelCache';
-import { LanguageMode } from '../../languageModes';
+import { ILanguageMode } from '../../languageModes';
 import { VueDocumentRegions } from '../../embeddedSupport';
 
 import { provideCompletionItems } from './completion-item';
@@ -15,7 +15,7 @@ import { requireLocalPkg } from '../../../utils/prettier/requirePkg';
 import { getFileFsPath } from '../../../utils/paths';
 import { VLSFormatConfig } from '../../../config';
 
-export function getStylusMode(documentRegions: LanguageModelCache<VueDocumentRegions>): LanguageMode {
+export function getStylusMode(documentRegions: LanguageModelCache<VueDocumentRegions>): ILanguageMode {
   const embeddedDocuments = getLanguageModelCache(10, 60, document =>
     documentRegions.get(document).getEmbeddedDocument('stylus')
   );

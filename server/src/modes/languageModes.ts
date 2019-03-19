@@ -35,7 +35,7 @@ export interface VLSServices {
   dependencyService?: DependencyService;
 }
 
-export interface LanguageMode {
+export interface ILanguageMode {
   getId(): string;
   configure?(options: any): void;
   configureService?(services: VLSServices): void;
@@ -56,17 +56,17 @@ export interface LanguageMode {
   getColorPresentations?(document: TextDocument, color: Color, range: Range): ColorPresentation[];
 
   onDocumentChanged?(filePath: string): void;
-  onDocumentRemoved(document: TextDocument): void;
+  onDocumentRemoved?(document: TextDocument): void;
   dispose(): void;
 }
 
 export interface LanguageModeRange extends Range {
-  mode: LanguageMode;
+  mode: ILanguageMode;
   attributeValue?: boolean;
 }
 
 export class LanguageModes {
-  private modes: { [k: string]: LanguageMode } = {};
+  private modes: { [k: string]: ILanguageMode } = {};
   private documentRegions: LanguageModelCache<VueDocumentRegions>;
   private modelCaches: LanguageModelCache<any>[];
 
@@ -92,7 +92,7 @@ export class LanguageModes {
     this.modes['typescript'] = jsMode;
   }
 
-  getModeAtPosition(document: TextDocument, position: Position): LanguageMode | null {
+  getModeAtPosition(document: TextDocument, position: Position): ILanguageMode | null {
     const languageId = this.documentRegions.get(document).getLanguageAtPosition(position);
     if (languageId) {
       return this.modes[languageId];
@@ -114,7 +114,7 @@ export class LanguageModes {
       });
   }
 
-  getAllModesInDocument(document: TextDocument): LanguageMode[] {
+  getAllModesInDocument(document: TextDocument): ILanguageMode[] {
     const result = [];
     for (const languageId of this.documentRegions.get(document).getLanguagesInDocument()) {
       const mode = this.modes[languageId];
@@ -125,7 +125,7 @@ export class LanguageModes {
     return result;
   }
 
-  getAllModes(): LanguageMode[] {
+  getAllModes(): ILanguageMode[] {
     const result = [];
     for (const languageId in this.modes) {
       const mode = this.modes[languageId];
@@ -136,7 +136,7 @@ export class LanguageModes {
     return result;
   }
 
-  getMode(languageId: string): LanguageMode {
+  getMode(languageId: string): ILanguageMode {
     return this.modes[languageId];
   }
 

@@ -1,4 +1,4 @@
-import { LanguageMode } from './languageModes';
+import { ILanguageMode } from './languageModes';
 
 export const NULL_HOVER = {
   contents: []
@@ -11,7 +11,7 @@ export const NULL_COMPLETION = {
   items: []
 };
 
-export const nullMode: LanguageMode = {
+export const nullMode: ILanguageMode = {
   getId: () => '',
   onDocumentRemoved() {},
   dispose() {},

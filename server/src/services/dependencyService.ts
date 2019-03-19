@@ -1,16 +1,16 @@
 import * as path from 'path';
 
-const enum State {
+export const enum State {
   Loaded,
   Unloaded
 }
 
-interface UnloadedDependency {
+export interface UnloadedDependency {
   name: string;
   state: State.Unloaded;
 }
 
-interface LoadedDependency<T> {
+export interface LoadedDependency<T> {
   name: string;
   state: State.Loaded;
   version: string;
@@ -18,16 +18,16 @@ interface LoadedDependency<T> {
   module: T;
 }
 
-type RuntimeDependency<T> = LoadedDependency<T> | UnloadedDependency;
+export type RuntimeDependency<T> = LoadedDependency<T> | UnloadedDependency;
 
-type T_PrettyHtml = typeof import('@starptech/prettyhtml');
-type T_ESLint = typeof import('eslint');
-type T_ESLintPluginVue = typeof import('eslint-plugin-vue');
-type T_JSBeautify = typeof import('eslint-plugin-vue');
-type T_Prettier = typeof import('prettier');
-// type T_PrettierEslint = typeof import('prettier-eslint');
-type T_StylusSupremacy = typeof import('stylus-supremacy');
-type T_TypeScript = typeof import('typescript');
+export type T_PrettyHtml = typeof import('@starptech/prettyhtml');
+export type T_ESLint = typeof import('eslint');
+export type T_ESLintPluginVue = typeof import('eslint-plugin-vue');
+export type T_JSBeautify = typeof import('eslint-plugin-vue');
+export type T_Prettier = typeof import('prettier');
+// export type T_PrettierEslint = typeof import('prettier-eslint');
+export type T_StylusSupremacy = typeof import('stylus-supremacy');
+export type T_TypeScript = typeof import('typescript');
 
 interface VLSDependencies {
   prettyhtml: RuntimeDependency<T_PrettyHtml>;
@@ -39,6 +39,8 @@ interface VLSDependencies {
   stylusSupremacy: RuntimeDependency<T_StylusSupremacy>;
   typescript: RuntimeDependency<T_TypeScript>;
 }
+
+type ValueOf<T> = T[keyof T];
 
 export class DependencyService {
   private dependencies: VLSDependencies = {
@@ -56,7 +58,7 @@ export class DependencyService {
 
   async init(workspacePath: string) {
     const workspaceTSPath = path.resolve(workspacePath, 'node_modules/typescript');
-    const tsModule = await import(workspaceTSPath);
+    const tsModule: T_TypeScript = await import(workspaceTSPath);
 
     this.dependencies.typescript = {
       name: 'typecript',
@@ -67,7 +69,7 @@ export class DependencyService {
     };
   }
 
-  getDependency(d: keyof VLSDependencies) {
+  getDependency(d: keyof VLSDependencies): ValueOf<VLSDependencies> | undefined {
     if (!this.dependencies[d]) {
       return undefined;
     }

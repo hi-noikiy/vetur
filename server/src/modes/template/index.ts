@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 
 import { LanguageModelCache, getLanguageModelCache } from '../languageModelCache';
 import { TextDocument, Position, Range, FormattingOptions } from 'vscode-languageserver-types';
-import { LanguageMode } from '../languageModes';
+import { ILanguageMode } from '../languageModes';
 import { VueDocumentRegions } from '../embeddedSupport';
 import { HTMLDocument } from './parser/htmlParser';
 import { doComplete } from './services/htmlCompletion';
@@ -23,7 +23,7 @@ import { getComponentInfoTagProvider } from './tagProviders/componentInfoTagProv
 
 type DocumentRegionCache = LanguageModelCache<VueDocumentRegions>;
 
-export function getVueHTMLMode(documentRegions: DocumentRegionCache, workspacePath: string | undefined): LanguageMode {
+export function getVueHTMLMode(documentRegions: DocumentRegionCache, workspacePath: string | undefined): ILanguageMode {
   let tagProviderSettings = getTagProviderSettings(workspacePath);
   let enabledTagProviders = getEnabledTagProviders(tagProviderSettings);
   const embeddedDocuments = getLanguageModelCache<TextDocument>(10, 60, document =>

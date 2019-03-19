@@ -1,7 +1,7 @@
-import { LanguageMode } from '../languageModes';
+import { ILanguageMode } from '../languageModes';
 import { doScaffoldComplete } from './scaffoldCompletion';
 
-export function getVueMode(): LanguageMode {
+export function getVueMode(): ILanguageMode {
   let config: any = {};
 
   return {
